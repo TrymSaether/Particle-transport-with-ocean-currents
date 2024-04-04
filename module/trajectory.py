@@ -60,13 +60,19 @@ class Trajectory:
         if show:
             plt.show()
 
-    def oppgave_1a(self, Ni=1, Nf=10000, steps=10):
+    def oppgave_1a(self, Ni=100, Nf=10000, steps=5):
         T = np.array([0, 50])
         x0, y0 = np.array([1.05, 0.50])
         ti, tf = T
         xs, ys, ts = self(x0, y0, T, Nf)
-        dt = (tf - ti) / Nf
-        plt.plot(xs, ys, label="dt = {}".format(dt))
+        N = np.linspace(Ni, Nf, steps)
+        for n in N:
+            xs, ys, ts = self(x0, y0, T, int(n))
+            dt = (tf - ti) / n
+            plt.plot(xs, ys, label="dt = {}".format(round(dt,4)))
+        plt.xlabel("x")
+        plt.ylabel("y")
+        plt.title("Oppgave 1a: Posisjonen til partikkelen for forskjellige dt (nøyaktighet)")
         plt.legend()
         plt.grid()
         plt.show()
