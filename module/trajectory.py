@@ -1,4 +1,5 @@
 import numpy as np
+from math import pi
 import matplotlib.pyplot as plt
 import cartopy  # Functions for plotting on map
 import cartopy.crs as ccrs
@@ -20,7 +21,7 @@ class Trajectory:
         return f"Trajectory(x0={self.x0}, T={self.T}, dt={self.dt})"
 
     def get_trajectory(self):
-        return self.xs
+        return self.xs, self.xl, self.ts
 
     def initial_conditions(self, x0, T, dt=0.01):
         self.x0 = x0
@@ -31,24 +32,40 @@ class Trajectory:
         self.x0 = np.zeros_like((2, Np))
         self.x0[0, :] = np.random.normal(loc=790000, scale=10000, size=Np)
         self.x0[1, :] = np.random.normal(loc=490000, scale=10000, size=Np)
+        
+    # FUNKSJONER
+    def velocity(x, y, t):
+        A, eps, w = 0.10, 0.25, 1  # initial constants
+        a = eps * np.sin(w * t) # equation 4a
+        b =  1 - 2 * eps * np.sin(w * t)
+        f =  a * x**2 + b * x # equation 4b
+        dx = -pi * A * np.sin(pi * f(x,t)) * np.cos(pi * y) # equation 3
+        dy =  pi * A * np.cos(pi * f(x,t)) * np.sin(pi * y) * (2*a*x + b)
+        return np.array([dx, dy])
 
-    def heun(self, func, x0, T, dt=0.01) -> tuple:
+    def f(self, X, t):
+        return self.velocity(X[0], X[1], t)
+
+    def heun(self, func, x0, T, dt=0.01, land_check=True) -> tuple:
         ti, tf = T
         xs = [x0]
+        xl = []
         ts = [ti]
-
+        
         while ts[-1] < tf:
             X, t = xs[-1], ts[-1]
             k1 = func(X, t)
             k2 = func(X + k1 * dt, t + dt)
+            
+            if(land_check & func.on_land(X)):
+                xl.append(X)
+            else: 
+                xs.append(X + 0.5 * dt * (k1 + k2))
+                ts.append(t + dt)
+        self.xs, self.xl, self.ts = np.array(xs), np.array(xl), np.array(ts)
+        return self.xs, self.xl, self.ts
 
-            xs.append(X + 0.5 * dt * (k1 + k2))
-            ts.append(t + dt)
-
-        self.xs, self.ts = np.array(xs), np.array(ts)
-        return self.xs, self.ts
-
-    def solve(self, func, method="heun") -> tuple:
+    def solve(self, func, method="heun"):
         if method == "heun":
             return self.heun(func, self.x0, self.T, self.dt)
         if func is None:
@@ -58,7 +75,8 @@ class Trajectory:
 
     def integrate(self):  # Alias for solve
         return self.solve(self.func)
-
+    
+    
     def plot(self, save=False, *args, **kwargs) -> tuple:
         xs = self.xs
         plt.style.use("seaborn-v0_8-whitegrid")
