@@ -28,48 +28,59 @@ class Trajectory:
         self.T = T
         self.dt = dt
 
-    def init_particles(self, Np=100):
-        self.x0 = np.zeros_like((2, Np))
-        self.x0[0, :] = np.random.normal(loc=790000, scale=10000, size=Np)
-        self.x0[1, :] = np.random.normal(loc=490000, scale=10000, size=Np)
+    def init_random_particles(self, Np=100, loc=[790000, 490000], scale=10000):
+        X0 = np.zeros((2, Np))
+        X0[0,:] = np.random.normal(loc = loc[0], scale=scale, size = Np)
+        X0[1,:] = np.random.normal(loc = loc[1], scale=scale, size = Np)
+        self.X0 = X0
+        self.initial_conditions(self.X0, self.T, self.dt)
         
-    # FUNKSJONER
-    def velocity(x, y, t):
-        A, eps, w = 0.10, 0.25, 1  # initial constants
-        a = eps * np.sin(w * t) # equation 4a
-        b =  1 - 2 * eps * np.sin(w * t)
-        f =  a * x**2 + b * x # equation 4b
-        dx = -pi * A * np.sin(pi * f(x,t)) * np.cos(pi * y) # equation 3
-        dy =  pi * A * np.cos(pi * f(x,t)) * np.sin(pi * y) * (2*a*x + b)
-        return np.array([dx, dy])
+    def init_linear_particles(self, Np=100, size=0.1):
+        X0 = np.zeros((2, Np))
+        X0[0,:] = np.linspace(0, size, Np)
+        X0[1,:] = np.linspace(0, size, Np)
+        
+        self.X0 = X0
+        self.initial_conditions(self.X0, self.T, self.dt)
+        
+    
+    def heun(self, func, x0, T, dt=0.01):
+        """heun method for solving ODEs
 
-    def f(self, X, t):
-        return self.velocity(X[0], X[1], t)
+        Args:
+            func (X, t): derivative function
+            x0: shape (2, Np)
+            T: [ti, tf]
+            dt: Defaults to 0.01.
 
-    def heun(self, func, x0, T, dt=0.01, land_check=True) -> tuple:
+        Returns:
+            _type_: _description_
+        """
         ti, tf = T
         xs = [x0]
-        xl = []
+        xl = [x0]
         ts = [ti]
         
         while ts[-1] < tf:
             X, t = xs[-1], ts[-1]
+            
+            if hasattr(func,'on_land'):
+                mask = func.on_land(X)
+                idx_land = np.where(mask is True)[0]
+                xl.append(X[:,idx_land])
+                X[:,idx_land] = 0
+            
             k1 = func(X, t)
             k2 = func(X + k1 * dt, t + dt)
-            
-            if(land_check & func.on_land(X)):
-                xl.append(X)
-            else: 
-                xs.append(X + 0.5 * dt * (k1 + k2))
-                ts.append(t + dt)
-        self.xs, self.xl, self.ts = np.array(xs), np.array(xl), np.array(ts)
-        return self.xs, self.xl, self.ts
+            xs.append(X + 0.5 * dt * (k1 + k2))
+            ts.append(t + dt)
+        
+        return np.array(xs), np.array(xl), np.array(ts)
+    
 
     def solve(self, func, method="heun"):
         if method == "heun":
             return self.heun(func, self.x0, self.T, self.dt)
-        if func is None:
-            raise ValueError("Function must be defined")
         else:
             raise ValueError("Invalid method")
 
@@ -84,7 +95,7 @@ class Trajectory:
         plt.xlabel("X")
         plt.ylabel("Y")
 
-    def plot_map(func, XS):
+    def plot_map(func, X, color='blue'):
         # scatter plot positions, note the extra transform keyword
         fig = plt.figure(figsize=(9, 6))
         ax = plt.axes(projection=ccrs.NorthPolarStereo())
@@ -100,11 +111,11 @@ class Trajectory:
             false_northing=func.dataset.projection_stere.false_northing,
             true_scale_latitude=func.dataset.projection_stere.standard_parallel,
         )  # Create projection object for converting particle positions
-        ax.scatter(XS[0, 0, :], XS[0, 1, :], s=1, transform=npstere, label="Initial")
+        ax.scatter(X[0, 0, :], X[0, 1, :], s=1, transform=npstere, label="Initial")
         ax.scatter(
-            XS[-1, 0, :],
-            XS[-1, 1, :],
-            color="red",
+            X[-1, 0, :],
+            X[-1, 1, :],
+            color=color,
             s=1,
             transform=npstere,
             label="Final",
@@ -122,7 +133,7 @@ class Trajectory:
             color="k",
             lw=0.5,
         )
-        for xs in XS:
+        for xs in X:
             plt.plot(
                 xs[0, :], xs[1, :], transform=npstere, color="k", lw=0.05, alpha=0.05
             )
