@@ -46,24 +46,38 @@ class Trajectory:
     def f(self, X, t):
         return self.velocity(X[0], X[1], t)
 
-    def heun(self, func, x0, T, dt=0.01, land_check=True) -> tuple:
+    def heun(self, func, x0, T, dt=0.01, land_check=True):
         ti, tf = T
-        xs = [x0]
-        xl = []
-        ts = [ti]
+        xs = np.array([x0])
+        xl = np.array([])
+        ts = np.array([ti])
         
         while ts[-1] < tf:
             X, t = xs[-1], ts[-1]
-            k1 = func(X, t)
-            k2 = func(X + k1 * dt, t + dt)
-            
-            if(land_check & func.on_land(X)):
-                xl.append(X)
-            else: 
-                xs.append(X + 0.5 * dt * (k1 + k2))
-                ts.append(t + dt)
-        self.xs, self.xl, self.ts = np.array(xs), np.array(xl), np.array(ts)
-        return self.xs, self.xl, self.ts
+
+            if(land_check):
+                bool_array = func.on_land(X)
+                coords = np.argwhere(bool_array == 1)
+                if len(coords>0):
+                    for coord in coords:
+                        p = coord[0]
+                        np.append(xl, xs[:,:,p])
+                        np.delete(xs, p, axis=2)
+                    X = xs[-1]
+                    k1 = func(X, t) 
+                    k2 = func(X + k1 * dt, t + dt)
+            else:
+                k1 = func(X, t) 
+                k2 = func(X + k1 * dt, t + dt)
+
+            np.append(xs, X + 0.5 * dt * (k1 + k2))
+            np.append(ts, t + dt)
+        
+        self.xs, self.ts, self.xl = xs,ts,xl
+        particles_on_land = len(xl)
+        print(particles_on_land)
+        percent = (particles_on_land/self.Np)*100
+        return self.xs, self.ts, xl, percent
 
     def solve(self, func, method="heun"):
         if method == "heun":
@@ -109,6 +123,7 @@ class Trajectory:
             transform=npstere,
             label="Final",
         )
+
 
         # Make outline a bit larger
 
