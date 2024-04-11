@@ -1,130 +1,196 @@
 import numpy as np
-from math import pi
-import matplotlib.pyplot as plt
-import cartopy  # Functions for plotting on map
+from matplotlib import pyplot as plt
+import time
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
 
 class Trajectory:
-    def __init__(self):
-        self.x0 = 0
-        self.dt = 0.01
-        self.Np = 100
-        self.T = [0, 10]
-
-    def __call__(self, func, x0, T, dt=0.01):
-        self.initial_conditions(x0, T, dt)
-        return self.solve(func)
-
-    def __repr__(self):
-        return f"Trajectory(x0={self.x0}, T={self.T}, dt={self.dt})"
-
-    def get_trajectory(self):
-        return self.xs, self.xl, self.ts
-
-    def initial_conditions(self, x0, T, dt=0.01):
-        self.x0 = x0
-        self.T = T
+    def __init__(
+        self,
+        x0=None,
+        T=(0, 10),
+        dt=0.01,
+        Np=100,
+        size=0.1,
+        loc=(790000, 490000),
+        scale=10000,
+        mode="random",
+    ):
         self.dt = dt
+        self.T = T
+        self.Np = Np
+        self.loc = loc
+        self.scale = scale
+        self.size = size
 
-    def init_random_particles(self, Np=100, loc=[790000, 490000], scale=10000):
-        X0 = np.zeros((2, Np))
-        X0[0,:] = np.random.normal(loc = loc[0], scale=scale, size = Np)
-        X0[1,:] = np.random.normal(loc = loc[1], scale=scale, size = Np)
-        self.X0 = X0
-        self.initial_conditions(self.X0, self.T, self.dt)
-        
-    def init_linear_particles(self, Np=100, size=0.1):
-        X0 = np.zeros((2, Np))
-        X0[0,:] = np.linspace(0, size, Np)
-        X0[1,:] = np.linspace(0, size, Np)
-        
-        self.X0 = X0
-        self.initial_conditions(self.X0, self.T, self.dt)
-        
-    
-    def heun(self, func, x0, T, dt=0.01):
-        """heun method for solving ODEs
+        if x0 is not None:
+            self.x0 = x0
+        else:
+            self.x0 = np.zeros((2, Np))
+            self.initialize_particles(mode)
 
-        Args:
-            func (X, t): derivative function
-            x0: shape (2, Np)
-            T: [ti, tf]
-            dt: Defaults to 0.01.
+    def __call__(self, func, method="heun"):
+        return self.solve(func, method)
 
-        Returns:
-            _type_: _description_
+    def initialize_particles(self, mode="random"):
+        if mode == "random":
+            self.x0[0, :] = np.random.normal(
+                loc=self.loc[0], scale=self.scale, size=self.Np
+            )
+            self.x0[1, :] = np.random.normal(
+                loc=self.loc[1], scale=self.scale, size=self.Np
+            )
+        elif mode == "linear":
+            self.x0[0, :] = np.linspace(1e-3, self.size, self.Np)
+            self.x0[1, :] = np.linspace(1e-3, self.size, self.Np)
+        elif mode == "grid":
+            self.x0 = np.meshgrid(
+                np.linspace(1e-3, self.size, int(np.sqrt(self.Np))),
+                np.linspace(1e-3, self.size, int(np.sqrt(self.Np))),
+            )
+            self.x0 = np.array(self.x0).reshape(2, self.Np)
+
+        else:
+            raise ValueError("Invalid initialization mode")
+
+    def heun_method(self, func, X0, check_land=False):
         """
-        ti, tf = T
-        xs = [x0]
-        xl = [x0]
-        ts = [ti]
-        
-        while ts[-1] < tf:
-            X, t = xs[-1], ts[-1]
-            
-            if hasattr(func,'on_land'):
-                mask = func.on_land(X)
-                idx_land = np.where(mask is True)[0]
-                xl.append(X[:,idx_land])
-                X[:,idx_land] = 0
-            
+        Implementation of Heun's method for solving ODEs, with land-hit handling.
+        """
+        ti, tf = self.T
+        tn = int(np.ceil((tf - ti) / self.dt))
+
+        Y = np.zeros((tn + 1, 2, X0.shape[1]))
+        V = np.zeros((tn + 1, 2, X0.shape[1]))
+
+        Y[0] = X0
+
+        t = ti
+        landed = np.zeros(X0.shape[1], dtype=bool)
+        land_percent = np.array([])
+        # [0,0,1,1,0,1,0]
+        for i in range(tn):
+            X = Y[i]
+            if hasattr(func, "on_land") and check_land:
+                land_mask = func.on_land(X)
+                landed |= land_mask
+
+            percent = np.sum(landed)
+            np.append(land_percent, percent)
+
             k1 = func(X, t)
-            k2 = func(X + k1 * dt, t + dt)
-            xs.append(X + 0.5 * dt * (k1 + k2))
-            ts.append(t + dt)
-        
-        return np.array(xs), np.array(xl), np.array(ts)
-    
+            k1[:, landed] = 0
+            X_temp = X + k1 * self.dt
+            k2 = func(X_temp, t + self.dt)
+            k2[:, landed] = 0
+
+            Y[i + 1] = X + 0.5 * self.dt * (k1 + k2)
+            V[i + 1] = 0.5 * (k1 + k2)
+
+            t += self.dt
+
+        self.land_percent = land_percent / self.Np
+        self.V = V
+        self.L = Y[-1, :, landed]
+
+        return Y
 
     def solve(self, func, method="heun"):
         if method == "heun":
-            return self.heun(func, self.x0, self.T, self.dt)
+            self.solution = self.heun_method(func, self.x0)
+            return self.solution
         else:
-            raise ValueError("Invalid method")
+            raise ValueError("Unsupported method")
 
-    def integrate(self):  # Alias for solve
-        return self.solve(self.func)
-    
-    
-    def plot(self, save=False, *args, **kwargs) -> tuple:
-        xs = self.xs
-        plt.style.use("seaborn-v0_8-whitegrid")
-        plt.plot(xs[0, :], xs[1, :], *args, **kwargs)
+    def get_solution(self):
+        return self.solution
+
+    def get_velocity(self):
+        return self.V
+
+    def get_land_particles(self):
+        return self.L.T
+
+    def plot(
+        self,
+        alpha=0.1,
+        linewidth=0.1,
+        s=1,
+        save=False,
+        filename="trajectory.png",
+        *args,
+        **kwargs,
+    ):
+        if not hasattr(self, "solution"):
+            raise ValueError("Solution not computed. Call solve first.")
+        for i in range(self.solution.shape[2]):
+            plt.scatter(
+                self.solution[0, 0, i],
+                self.solution[0, 1, i],
+                c="red",
+                label="Initial Position",
+                s=s,
+            )
+            plt.scatter(
+                self.solution[-1, 0, i],
+                self.solution[-1, 1, i],
+                c="blue",
+                label="Final Position",
+                s=s,
+            )
+            plt.plot(
+                self.solution[:, 0, i],
+                self.solution[:, 1, i],
+                alpha=alpha,
+                linewidth=linewidth,
+                *args,
+                **kwargs,
+            )
         plt.xlabel("X")
         plt.ylabel("Y")
+        if save:
+            plt.savefig(filename)
+        plt.show()
 
-    def plot_map(func, X, color='blue'):
-        # scatter plot positions, note the extra transform keyword
-        fig = plt.figure(figsize=(9, 6))
+    def plot_map(
+        f,
+        X,
+        V,
+        L=None,
+        figsize=(15, 12),
+        extent=(7, 11, 63.5, 65),
+        s=2,
+        scatter_color=("blue", "red"),
+        land_color="purple",
+        plot_linewidth=0.1,
+        plot_color="lightblue",
+        alpha=0.1,
+        stream_linewidth=1,
+        stream_color="black",
+        density=1,
+    ):
+        fig = plt.figure(figsize=figsize)
         ax = plt.axes(projection=ccrs.NorthPolarStereo())
 
+        # Adding land feature
         ax.add_feature(
-            cfeature.NaturalEarthFeature("physical", "land", "10m", color="#cccccc")
+            cfeature.NaturalEarthFeature(
+                "physical", "land", "10m", edgecolor="face", facecolor="#cccccc"
+            )
         )
 
-        npstere = ccrs.Stereographic(
-            central_latitude=90,
-            central_longitude=func.dataset.projection_stere.straight_vertical_longitude_from_pole,
-            false_easting=func.dataset.projection_stere.false_easting,
-            false_northing=func.dataset.projection_stere.false_northing,
-            true_scale_latitude=func.dataset.projection_stere.standard_parallel,
-        )  # Create projection object for converting particle positions
-        ax.scatter(X[0, 0, :], X[0, 1, :], s=1, transform=npstere, label="Initial")
-        ax.scatter(
-            X[-1, 0, :],
-            X[-1, 1, :],
-            color=color,
-            s=1,
-            transform=npstere,
-            label="Final",
-        )
-
-        # Make outline a bit larger
-
-        # Add gridlines
-        gl = ax.gridlines(
+        # Projection object for converting particle positions
+        projection_params = {
+            "central_latitude": 90,
+            "central_longitude": f.dataset.projection_stere.straight_vertical_longitude_from_pole,
+            "false_easting": f.dataset.projection_stere.false_easting,
+            "false_northing": f.dataset.projection_stere.false_northing,
+            "true_scale_latitude": f.dataset.projection_stere.standard_parallel,
+        }
+        npstere = ccrs.Stereographic(**projection_params)
+        ax.set_extent(extent, crs=ccrs.PlateCarree())
+        ax.gridlines(
             draw_labels=True,
             dms=True,
             x_inline=False,
@@ -133,9 +199,57 @@ class Trajectory:
             color="k",
             lw=0.5,
         )
-        for xs in X:
-            plt.plot(
-                xs[0, :], xs[1, :], transform=npstere, color="k", lw=0.05, alpha=0.05
+        ax.plot(
+            X[:, 0, :],
+            X[:, 1, :],
+            transform=npstere,
+            color=plot_color,
+            linewidth=plot_linewidth,
+            alpha=alpha,
+        )
+
+        ax.streamplot(
+            X[:, 0, :],
+            X[:, 1, :],
+            V[:, 0, :],
+            V[:, 1, :],
+            transform=npstere,
+            color=stream_color,
+            linewidth=stream_linewidth,
+            density=density,
+            arrowstyle="->",
+            arrowsize=1,
+        )
+        # Plot initial and final positions
+        ax.scatter(
+            X[0, 0, :],
+            X[0, 1, :],
+            transform=npstere,
+            s=s,
+            label="Initial positions",
+            color=scatter_color[0],
+        )
+        ax.scatter(
+            X[-1, 0, :],
+            X[-1, 1, :],
+            transform=npstere,
+            s=s,
+            label="Final positions",
+            color=scatter_color[1],
+        )
+        if L is not None:
+            s = 3 * s
+            ax.scatter(
+                L[0, :],
+                L[1, :],
+                transform=npstere,
+                s=s,
+                label="Landed particles",
+                color=land_color,
             )
+        # Setting the map extent and adding gridlines
+
         ax.legend()
         plt.tight_layout()
+
+        plt.show()
