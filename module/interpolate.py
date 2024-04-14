@@ -73,3 +73,14 @@ class Interpolator:
             X[0, :], X[1, :], grid=False
         )
         return np.array([dx, dy])
+
+
+def velocity(X, t):
+    A, eps, w = 0.10, 0.25, 1  # Initial constants
+    a = eps * np.sin(w * t)  # Equation 4a
+    b = 1 - 2 * eps * np.sin(w * t)
+    x, y = X  # Assuming X is a 2-element array or has shape (2, N)
+    f = a * x**2 + b * x  # Equation 4b
+    dx = -np.pi * A * np.sin(np.pi * f) * np.cos(np.pi * y)  # Equation 3
+    dy = np.pi * A * np.cos(np.pi * f) * np.sin(np.pi * y) * (2 * a * x + b)
+    return np.array([dx, dy])
