@@ -6,6 +6,20 @@ import cartopy.feature as cfeature
 
 
 class Trajectory:
+    """
+    Class representing a trajectory of particles.
+
+    Parameters:
+    - X0 (ndarray, optional): Initial positions of the particles. If not provided, particles are initialized at (0, 0).
+    - time_interval (tuple, optional): Time interval for the trajectory. Default is (0, 10).
+    - stepsize (float, optional): Step size for the numerical integration. Default is 0.01.
+    - number_of_particles (int, optional): Number of particles in the trajectory. Default is 100.
+    - mode (str, optional): Initialization mode for the particles. Default is "map".
+    - location (list, optional): Start and end locations for the particles. Default is [0, 0].
+    - scale (float, optional): Scale factor for the particle initialization. Default is 1.
+    - check_land (bool, optional): Flag indicating whether to check if particles have landed. Default is False.
+    """
+
     def __init__(
         self,
         X0=None,
@@ -33,6 +47,17 @@ class Trajectory:
             self.initialize_particles(mode)
 
     def __call__(self, interpolator, method="heun"):
+        """
+        Compute the trajectory using the specified interpolator and integration method.
+
+        Parameters:
+        - interpolator (object): Interpolator object used to compute the particle velocities.
+        - method (str, optional): Integration method. Default is "heun".
+
+        Returns:
+        - X (ndarray): X-coordinates of the particle positions.
+        - Y (ndarray): Y-coordinates of the particle positions.
+        """
         self.interpolator = interpolator
         if method == "heun":
             return self.heun(interpolator, self.X0)
@@ -40,6 +65,12 @@ class Trajectory:
             raise ValueError("Unsupported method")
 
     def initialize_particles(self, mode):
+        """
+        Initialize the particles based on the specified mode.
+
+        Parameters:
+        - mode (str): Initialization mode for the particles.
+        """
         if mode == "map":
             self.X0[0, :] = np.random.normal(
                 loc=self.start_location, scale=self.scale, size=self.number_of_particles
@@ -69,6 +100,17 @@ class Trajectory:
             raise ValueError("Invalid initialization mode")
 
     def heun(self, interpolator, X0):
+        """
+        Perform numerical integration using the Heun's method.
+
+        Parameters:
+        - interpolator (object): Interpolator object used to compute the particle velocities.
+        - X0 (ndarray): Initial positions of the particles.
+
+        Returns:
+        - X (ndarray): X-coordinates of the particle positions.
+        - Y (ndarray): Y-coordinates of the particle positions.
+        """
         ti, tf = self.time_interval
         h = self.stepsize
         tn = int(np.ceil((tf - ti) / h))
@@ -105,6 +147,16 @@ class Trajectory:
         return self.X, self.Y
 
     def get_XY(self):
+        """
+        Returns the X and Y coordinates for the trajectory.
+
+        If the interpolator does not have the attribute "on_land", it generates a grid of X and Y coordinates
+        based on the limits of the trajectory. Otherwise, it returns the pre-calculated X and Y coordinates.
+
+        Returns:
+            gridX (ndarray): The X coordinates of the trajectory.
+            gridY (ndarray): The Y coordinates of the trajectory.
+        """
         if not hasattr(self.interpolator, "on_land"):
             limits = self.get_limits()
             xmin, xmax, ymin, ymax = limits
@@ -114,40 +166,85 @@ class Trajectory:
             return gridX, gridY
         else:
             return self.X, self.Y
+    """
     def get_XY_land(self):
+        
+        Returns the X and Y coordinates of the landing point.
+
+        If the check_land attribute is True, the method returns the X_land and Y_land attributes.
+        If the check_land attribute is False, the method returns None.
+
+        Returns:
+            tuple or None: A tuple containing the X and Y coordinates of the landing point, or None if check_land is False.
+        
         if self.check_land:
             return self.X_land, self.Y_land
         return None
-
+    """
     def get_UV(self, t0=0):
+        """
+        Returns the U and V components of the wind velocity at a given time.
+
+        Parameters:
+            t0 (float): The time at which to retrieve the wind velocity. Default is 0.
+
+        Returns:
+            tuple: A tuple containing the U and V components of the wind velocity.
+                   If the interpolator has the attribute "on_land", it returns the interpolated wind velocity at the given time.
+                   Otherwise, it returns the pre-calculated U and V components.
+
+        """
         if not hasattr(self.interpolator, "on_land"):
             gridX, gridY = self.get_XY()
             return self.interpolator([gridX, gridY], t0)
         return self.U, self.V
 
     def get_land_percent(self):
+        """
+        Returns the percentage of particles that have landed.
+
+        Returns:
+            ndarray: An array containing the percentage of particles that have landed at each time step.
+        """
         return self.land_percent
 
     def get_time(self):
+        """
+        Returns the time array for the trajectory.
+
+        Returns:
+            ndarray: An array containing the time values for the trajectory.
+        """
         return np.arange(self.time_interval[0], self.time_interval[1], self.stepsize)
 
     def get_limits(self):
+        """
+        Returns the minimum and maximum values of X and Y coordinates.
+
+        Returns:
+            tuple: A tuple containing the minimum and maximum values of X and Y coordinates.
+        """
         return np.min(self.X), np.max(self.X), np.min(self.Y), np.max(self.Y)
 
     def distance_particles(self):
         """
-        calculate the distance traveled by each particle
+        Calculate the distance traveled by each particle.
+
+        Returns:
+            ndarray: An array containing the distance traveled by each particle.
         """
         return np.sum(
             np.sqrt(np.diff(self.X, axis=0) ** 2 + np.diff(self.Y, axis=0) ** 2), axis=0
         )
 
     def info(self):
+        """
+        Print information about the trajectory.
+        """
         print(f"Trajectory with:")
         print(f"Np: {self.number_of_particles} particles")
         print(f"Time: {self.time_interval}")
         print(f"Time step: {self.stepsize}")
-        print(f"Initial position: {self.X0[:, 0]}")
         print(f"Mode: {self.mode}")
         print(f"Check land: {self.check_land}")
         print(f"Velocity shape: {self.V.shape}")
@@ -162,9 +259,21 @@ class Trajectory:
             print(f"Projection: {self.npstere}")
         if hasattr(self, "X_land"):
             print(f"Land particles: {self.X_land.shape[0]}")
+        if hasattr(self.interpolator, "on_land"):
+            print(f"Windage factor: {self.interpolator.fw}")
         return None
 
     def plot(self, axs=None, **kwargs):
+        """
+        Plot the trajectory.
+
+        Parameters:
+            axs (matplotlib.axes.Axes, optional): The axes on which to plot the trajectory. If not provided, a new figure and axes will be created.
+            **kwargs: Additional keyword arguments to be passed to the plot function.
+
+        Returns:
+            matplotlib.axes.Axes: The axes on which the trajectory is plotted.
+        """
         if axs is None:
             figs, axs = plt.subplots()
 
@@ -176,6 +285,18 @@ class Trajectory:
         return axs
 
     def scatter(self, axs=None, t=0, label="", **kwargs):
+        """
+        Scatter plot of the trajectory at a given time.
+
+        Parameters:
+            axs (matplotlib.axes.Axes, optional): The axes on which to plot the scatter plot. If not provided, a new figure and axes will be created.
+            t (int, optional): The time index at which to plot the scatter plot. Default is 0.
+            label (str, optional): The label for the scatter plot. Default is an empty string.
+            **kwargs: Additional keyword arguments to be passed to the scatter function.
+
+        Returns:
+            matplotlib.axes.Axes: The axes on which the scatter plot is plotted.
+        """
         if axs is None:
             figs, axs = plt.subplots()
 
@@ -190,14 +311,25 @@ class Trajectory:
                 label=label,
                 color="red",
                 marker="x",
-                s=10,
+                s=15,
             )
             axs.scatter(self.X[t, :], self.Y[t, :], **kwargs)
         else:
             axs.scatter(self.X[t, :], self.Y[t, :], **kwargs)
+        axs.set_aspect("equal")
         return axs
 
-    def streamplot(self, axs=None, **kwargs):
+    def streamplot(self, axs=None,time_velocity_field=0, **kwargs):
+        """
+        Plots streamlines of the vector field defined by the trajectory.
+
+        Parameters:
+            axs (matplotlib.axes.Axes, optional): The axes on which to plot the streamlines. If not provided, a new figure and axes will be created.
+            **kwargs: Additional keyword arguments to be passed to the `streamplot` function.
+
+        Returns:
+            matplotlib.axes.Axes: The axes object on which the streamlines are plotted.
+        """
         if axs is None:
             figs, axs = plt.subplots()
         if hasattr(self, "npstere"):
@@ -206,13 +338,25 @@ class Trajectory:
             )
         if not hasattr(self.interpolator, "on_land"):
             gridX, gridY = self.get_XY()
-            gridU, gridV = self.get_UV()
+            gridU, gridV = self.get_UV(time_velocity_field)
             axs.streamplot(gridX, gridY, gridU, gridV, **kwargs)
         else:
             axs.streamplot(self.X, self.Y, self.U, self.V, **kwargs)
         return axs
 
     def init_map(self, axs=None, figsize=(10, 10), **kwargs):
+        """
+        Initialize the map for plotting trajectory.
+
+        Parameters:
+        - axs (matplotlib.axes.Axes, optional): The axes object to plot on. If None, a new figure and axes will be created.
+        - figsize (tuple, optional): The size of the figure in inches. Default is (10, 10).
+        - **kwargs: Additional keyword arguments to be passed to the plot function.
+
+        Returns:
+        - axs (matplotlib.axes.Axes): The axes object used for plotting.
+
+        """
         if axs is None:
             figs, axs = plt.subplots(
                 figsize=figsize, subplot_kw={"projection": ccrs.PlateCarree()}
