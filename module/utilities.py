@@ -4,7 +4,6 @@ import numpy as np
 from module.trajectory import Trajectory
 
 def run_steplength_test(
-    ax,
     interpolator,
     X0,
     time_testvalues=[50, 100],
@@ -27,25 +26,43 @@ def run_steplength_test(
     - time_array (numpy.ndarray): An array containing the execution times for each trajectory.
 
     """
+    # Plot the trajectories
+    fig, ax = plt.subplots(2, len(time_testvalues), figsize=(10, 7), sharex=True, sharey=True)
     time_array = np.zeros((len(time_testvalues), len(stepsize_testvalues)))
     for i, tf in enumerate(time_testvalues):
-        ax[i].cla()
-        ax[i].plot(X0[0], X0[1], "bo", **kwargs)
+        ax[1, i].remove()
+        ax[0,i].cla()
+        ax[0,i].plot(X0[0], X0[1], "bo", **kwargs) # Plot of Initial position
         for j, dt in enumerate(stepsize_testvalues):
             traj = Trajectory(X0=X0, time_interval=[0, tf], stepsize=dt)
+
             tik = time.time()
-            X, Y = traj(interpolator)
-            tok = time.time() - tik
-            time_array[i, j] = tok
-            ax[i].plot(X, Y, label=f"dt = {dt}", **kwargs)
-            ax[i].plot(X[-1], Y[-1], "ro", **kwargs)
-            ax[i].set_title(f"Trajectory at T = {tf}")
-            ax[i].set_xlabel("x")
-            ax[i].set_ylabel("y")
-            ax[i].grid(True)
-            ax[i].set_aspect("equal")
-        ax[i].set_aspect("equal")
-    return ax, time_array
+            X, Y = traj(interpolator) # Trajectory calculation with velocity interpolator function using Heuns method
+            time_array[i, j] = time.time() - tik
+
+            ax[0,i].plot(X, Y, label=f"dt = {dt}", **kwargs) # Trajectory at different timesteps
+            ax[0,i].plot(X[-1], Y[-1], "ro", **kwargs) # Plot of final position
+            ax[0,i].set_title(f"Trajectory at T = {tf}")
+            ax[0,i].set_xlabel("x")
+            ax[0,i].set_ylabel("y")
+            ax[0,i].grid(True)
+
+    # Plot the runtime vs. timestep
+    bottom_ax = fig.add_subplot(212)
+    bottom_ax.plot(stepsize_testvalues, time_array[0, :], label="T = 50")
+    bottom_ax.plot(stepsize_testvalues, time_array[1, :], label="T = 100")
+    bottom_ax.set_xscale("log")
+    bottom_ax.set_title("Runtime vs. timestep")
+    bottom_ax.set_xlabel("timestep")
+    bottom_ax.set_ylabel("runtime")
+    bottom_ax.grid()
+    bottom_ax.legend()
+    fig.suptitle("Steplength test")
+    fig.legend(*ax[0, 0].get_legend_handles_labels(), loc="upper right")
+    plt.tight_layout()
+    plt.show()
+
+
 
 
 def run_timing_test(interpolator, number_of_particles_testvalues=[1, 100, 1000, 10000, 10000], time_interval=[0, 10],  stepsize=0.01):
@@ -74,3 +91,5 @@ def run_timing_test(interpolator, number_of_particles_testvalues=[1, 100, 1000, 
 
     linear_times = [Np * (times[0] / number_of_particles_testvalues[0]) for Np in number_of_particles_testvalues]
     return times, linear_times
+
+

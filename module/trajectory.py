@@ -376,7 +376,7 @@ class Trajectory:
         }
         npstere = ccrs.Stereographic(**projection_params)
         axs.plot(self.X, self.Y, transform=npstere, **kwargs)
-        axs.set_extent(axs.get_extent(crs=ccrs.PlateCarree()), crs=ccrs.PlateCarree())
+        axs.set_extent(axs.get_extent())
         axs.gridlines(
             draw_labels=True,
             dms=True,
