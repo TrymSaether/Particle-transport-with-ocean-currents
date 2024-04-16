@@ -110,7 +110,7 @@ def create_gif(trajectory, **args):
     ax1 = ax.twinx()
 
     def animate(i):
-        ax.plot(X[i, :], Y[i, :], **plot_style)
+        ax.plot(X[i, i:], Y[i, i:], **plot_style)
         ax1.clear()
         ax1.scatter(X[i, :], Y[i, :], **scatter_style[0])
         if i == X.shape[0]:
