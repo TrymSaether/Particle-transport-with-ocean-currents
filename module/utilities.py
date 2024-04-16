@@ -1,5 +1,7 @@
 import time
 from matplotlib import pyplot as plt
+from matplotlib.animation import FuncAnimation
+
 import numpy as np
 from module.trajectory import Trajectory
 
@@ -93,3 +95,32 @@ def run_timing_test(interpolator, number_of_particles_testvalues=[1, 100, 1000, 
     return times, linear_times
 
 
+def create_gif(trajectory, **args):
+    X, Y = trajectory.get_XY()
+    Np = trajectory.number_of_particles
+    T = trajectory.time_interval[1]
+    plot_style = args[0]
+    scatter_style = args[1]
+    fig, ax = plt.subplots(1, 1, figsize=(10, 7))
+    ax.scatter(X[0, :], Y[0, :])
+    ax.set_xlim(X.min(), X.max())
+    ax.set_ylim(Y.min(), Y.max())
+    ax.set_xlabel("X (m)")
+    ax.set_ylabel("Y (m)")
+    ax1 = ax.twinx()
+
+    def animate(i):
+        ax.plot(X[i, :], Y[i, :], **plot_style)
+        ax1.clear()
+        ax1.scatter(X[i, :], Y[i, :], **scatter_style[0])
+        if i == X.shape[0]:
+            ax.scatter(X[-1, :], Y[-1, :], **scatter_style[1])
+        ax.set_title(f"Trajectories of $N_p = {Np}$ particles over T = {T}")
+        ax.grid()
+    
+
+
+    anim = FuncAnimation(fig, animate, frames=X.shape[0], interval=100)
+    # Save gif
+    anim.save("trajectories.gif", writer="pillow")
+    plt.show()
