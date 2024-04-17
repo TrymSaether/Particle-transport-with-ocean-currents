@@ -29,7 +29,7 @@ def run_steplength_test(
 
     """
     # Plot the trajectories
-    fig, ax = plt.subplots(2, len(time_testvalues), figsize=(10, 7), sharex=True, sharey=True)
+    fig, ax = plt.subplots(2, len(time_testvalues), figsize=(14, 10), dpi= 150, sharex=True, sharey=True)
     time_array = np.zeros((len(time_testvalues), len(stepsize_testvalues)))
     for i, tf in enumerate(time_testvalues):
         ax[1, i].remove()
@@ -60,7 +60,7 @@ def run_steplength_test(
     bottom_ax.grid()
     bottom_ax.legend()
     fig.suptitle("Steplength test")
-    fig.legend(*ax[0, 0].get_legend_handles_labels(), loc="upper right")
+    fig.legend(*ax[0, 0].get_legend_handles_labels(), loc="upper left")
     plt.tight_layout()
     plt.show()
 
@@ -99,24 +99,24 @@ def create_gif(trajectory, **args):
     X, Y = trajectory.get_XY()
     Np = trajectory.number_of_particles
     T = trajectory.time_interval[1]
-    plot_style = args[0]
-    scatter_style = args[1]
+    
     fig, ax = plt.subplots(1, 1, figsize=(10, 7))
-    ax.scatter(X[0, :], Y[0, :])
+    ax.scatter(X[0, :], Y[0, :], s=0.5, color='darkblue')
     ax.set_xlim(X.min(), X.max())
     ax.set_ylim(Y.min(), Y.max())
     ax.set_xlabel("X (m)")
     ax.set_ylabel("Y (m)")
-    ax1 = ax.twinx()
-
+    ax.grid()
+    ax.set_title(f"Trajectories of $N_p = {Np}$ particles over T = {T}")
     def animate(i):
-        ax.plot(X[i, i:], Y[i, i:], **plot_style)
-        ax1.clear()
-        ax1.scatter(X[i, :], Y[i, :], **scatter_style[0])
+        ax.clear()
+        ax.plot(X[:i, :], Y[:i, :], color='cornflowerblue', alpha=0.3, linewidth=0.1)
+        ax.scatter(X[i, :], Y[i, :], color='green', s=0.5)
         if i == X.shape[0]:
-            ax.scatter(X[-1, :], Y[-1, :], **scatter_style[1])
-        ax.set_title(f"Trajectories of $N_p = {Np}$ particles over T = {T}")
-        ax.grid()
+            ax.scatter(X[-1, :], Y[-1, :], color='red', s=0.5)
+        
+        
+
     
 
 
